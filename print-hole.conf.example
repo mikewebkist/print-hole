@@ -1,0 +1,21 @@
+# Print Hole - Printer Configuration
+# Copy this file to ~/.print-hole.conf and update with your printer's USB IDs
+# 
+# Find your printer's vendor_id and product_id using: lsusb
+# Example output: Bus 001 Device 003: ID 0483:5720 STMicroelectronics
+#                                        ^^^^ ^^^^
+#                                        |    |
+#                                        |    product_id
+#                                        vendor_id
+
+[printer]
+# USB Vendor ID (hex format with 0x prefix, or decimal)
+vendor_id = 0x0483
+
+# USB Product ID (hex format with 0x prefix, or decimal)  
+product_id = 0x5720
+
+# Optional: Printer profile name for python-escpos
+# Common profiles: TM-T88IV, TM-T20, POS-5890
+# Leave empty to use default
+profile = 

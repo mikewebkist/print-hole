@@ -1,0 +1,112 @@
+/**
+ * Print Hole - Custom Styles
+ */
+
+/* General */
+body {
+    background-color: #f8f9fa;
+}
+
+/* Drop Zone */
+.drop-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: #fff;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: #0d6efd;
+    background-color: #f0f7ff;
+}
+
+.drop-zone i {
+    color: #6c757d;
+}
+
+.drop-zone:hover i,
+.drop-zone.drag-over i {
+    color: #0d6efd;
+}
+
+/* Preview Container */
+.preview-container {
+    background-color: #f0f0f0;
+    min-height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 1rem;
+}
+
+.preview-image {
+    max-width: 280px;
+    width: 280px;
+    height: auto;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    background: #fff;
+}
+
+/* Textarea */
+#textInput {
+    resize: vertical;
+    min-height: 150px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 767px) {
+    .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    .drop-zone {
+        padding: 1.5rem;
+    }
+    
+    .drop-zone .display-4 {
+        font-size: 2rem;
+    }
+}
+
+/* Toast styling */
+.toast-container {
+    z-index: 1100;
+}
+
+/* Print button hover effect */
+#printBtn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+#printBtn {
+    transition: all 0.2s ease;
+}
+
+/* Badge in card header */
+.card-header .badge {
+    font-size: 0.9rem;
+}
+
+/* Mode toggle buttons */
+.btn-group[role="group"] .btn {
+    flex: 1;
+}
+
+/* Monospace preview simulation */
+.preview-image {
+    background-color: #fff;
+    padding: 0;
+}
