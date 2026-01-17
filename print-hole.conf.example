@@ -19,3 +19,9 @@ product_id = 0x5720
 # Common profiles: TM-T88IV, TM-T20, POS-5890
 # Leave empty to use default
 profile = 
+
+[gemini]
+# Google Gemini API key for AI image generation
+# Get your API key at: https://aistudio.google.com/apikey
+# Alternatively, set the GEMINI_API_KEY environment variable
+api_key = 

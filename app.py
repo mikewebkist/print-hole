@@ -21,6 +21,7 @@ from markdown_printer import (
     FontSize
 )
 from printer import get_printer
+from ai_generator import generate_image, generate_image_base64
 
 app = Flask(__name__)
 
@@ -75,7 +76,7 @@ def preview():
             preview_image, length_inches = generate_preview(content, font_size)
             preview_base64 = preview_to_base64(preview_image)
         
-        else:
+        elif mode == 'image':
             # Process image
             rotation = data.get('rotation', 'auto')
             if rotation not in ('auto', 'original', 'square'):
@@ -88,6 +89,16 @@ def preview():
             rotation_mode = RotationMode(rotation)
             processed_image, length_inches = process_image(image, rotation_mode)
             preview_base64 = image_to_base64(processed_image)
+        
+        else:  # mode == 'ai'
+            # AI-generated images are previewed after generation
+            # Return empty preview - user must click Generate first
+            return jsonify({
+                'preview': '',
+                'lengthInches': 0,
+                'warning': False,
+                'message': 'Click Generate to create an image from your prompt'
+            })
         
         return jsonify({
             'preview': preview_base64,
@@ -142,7 +153,18 @@ def print_content():
             commands, _ = parse_markdown(content, font_size)
             success, error = printer.print_text_commands(commands)
         
-        else:
+        elif mode == 'ai':
+            # For AI mode, content is already base64 image data from generation
+            rotation = data.get('rotation', 'auto')
+            if rotation not in ('auto', 'original', 'square'):
+                rotation = 'auto'
+            
+            image = base64_to_image(content)
+            rotation_mode = RotationMode(rotation)
+            processed_image, _ = process_image(image, rotation_mode)
+            success, error = printer.print_image(processed_image)
+        
+        else:  # mode == 'image'
             # Process and print image
             rotation = data.get('rotation', 'auto')
             if rotation not in ('auto', 'original', 'square'):
@@ -163,6 +185,70 @@ def print_content():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+
+@app.route('/api/generate', methods=['POST'])
+def generate_ai_image():
+    """
+    Generate an image from a text prompt using Gemini AI.
+    
+    Request JSON:
+    {
+        "prompt": string (text description of image to generate),
+        "rotation": "auto" | "original" | "square" (optional)
+    }
+    
+    Response JSON:
+    {
+        "image": string (base64 PNG),
+        "preview": string (base64 PNG, processed for printing),
+        "lengthInches": float,
+        "warning": bool
+    }
+    """
+    try:
+        data = request.get_json()
+        prompt = data.get('prompt', '').strip()
+        
+        if not prompt:
+            return jsonify({
+                'error': 'Prompt cannot be empty'
+            }), 400
+        
+        # Generate image from prompt
+        image_base64 = generate_image_base64(prompt)
+        
+        # Process for print preview
+        rotation = data.get('rotation', 'auto')
+        if rotation not in ('auto', 'original', 'square'):
+            rotation = 'auto'
+        
+        image = base64_to_image(image_base64)
+        rotation_mode = RotationMode(rotation)
+        processed_image, length_inches = process_image(image, rotation_mode)
+        preview_base64 = image_to_base64(processed_image)
+        
+        return jsonify({
+            'image': image_base64,
+            'preview': preview_base64,
+            'lengthInches': round(length_inches, 2),
+            'warning': length_inches > MAX_LENGTH_INCHES
+        })
+    
+    except ValueError as e:
+        return jsonify({
+            'error': str(e)
+        }), 400
+    
+    except RuntimeError as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+    
+    except Exception as e:
+        return jsonify({
+            'error': f'Failed to generate image: {str(e)}'
         }), 500
 
 

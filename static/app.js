@@ -7,14 +7,20 @@
 const modeRadios = document.querySelectorAll('input[name="mode"]');
 const textSection = document.getElementById('textSection');
 const imageSection = document.getElementById('imageSection');
+const aiSection = document.getElementById('aiSection');
 const textInput = document.getElementById('textInput');
 const fontSize = document.getElementById('fontSize');
 const rotationRadios = document.querySelectorAll('input[name="rotation"]');
+const aiRotationRadios = document.querySelectorAll('input[name="aiRotation"]');
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const imageInfo = document.getElementById('imageInfo');
 const imageName = document.getElementById('imageName');
 const clearImage = document.getElementById('clearImage');
+const aiPrompt = document.getElementById('aiPrompt');
+const generateBtn = document.getElementById('generateBtn');
+const aiImageInfo = document.getElementById('aiImageInfo');
+const clearAiImage = document.getElementById('clearAiImage');
 const previewPlaceholder = document.getElementById('previewPlaceholder');
 const previewImage = document.getElementById('previewImage');
 const lengthBadge = document.getElementById('lengthBadge');
@@ -30,6 +36,7 @@ const successToast = new bootstrap.Toast(document.getElementById('successToast')
 // State
 let currentMode = 'text';
 let currentImageData = null;
+let currentAiImageData = null;
 let previewDebounceTimer = null;
 let currentLengthInches = 0;
 
@@ -38,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModeToggle();
     setupTextInput();
     setupImageInput();
+    setupAiInput();
     setupPrintButton();
 });
 
@@ -47,15 +55,25 @@ function setupModeToggle() {
         radio.addEventListener('change', (e) => {
             currentMode = e.target.value;
             
+            // Hide all sections first
+            textSection.classList.add('d-none');
+            imageSection.classList.add('d-none');
+            aiSection.classList.add('d-none');
+            
             if (currentMode === 'text') {
                 textSection.classList.remove('d-none');
-                imageSection.classList.add('d-none');
                 updatePreview();
-            } else {
-                textSection.classList.add('d-none');
+            } else if (currentMode === 'image') {
                 imageSection.classList.remove('d-none');
                 if (currentImageData) {
                     updatePreview();
+                } else {
+                    resetPreview();
+                }
+            } else if (currentMode === 'ai') {
+                aiSection.classList.remove('d-none');
+                if (currentAiImageData) {
+                    updateAiPreview();
                 } else {
                     resetPreview();
                 }
@@ -142,6 +160,147 @@ function setupImageInput() {
         fileInput.value = '';
         resetPreview();
     });
+}
+
+// AI Input
+function setupAiInput() {
+    // Generate button
+    generateBtn.addEventListener('click', generateAiImage);
+    
+    // AI rotation change - re-process existing image
+    aiRotationRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (currentAiImageData) {
+                updateAiPreview();
+            }
+        });
+    });
+    
+    // Clear AI image
+    clearAiImage.addEventListener('click', () => {
+        currentAiImageData = null;
+        aiImageInfo.classList.add('d-none');
+        resetPreview();
+    });
+}
+
+// Generate AI image
+async function generateAiImage() {
+    const prompt = aiPrompt.value.trim();
+    
+    if (!prompt) {
+        showError('Please enter a prompt to generate an image');
+        return;
+    }
+    
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
+    
+    try {
+        const rotation = document.querySelector('input[name="aiRotation"]:checked').value;
+        
+        const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                rotation: rotation
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        // Store the generated image data (original, not processed)
+        currentAiImageData = 'data:image/png;base64,' + data.image;
+        aiImageInfo.classList.remove('d-none');
+        
+        // Show preview
+        previewImage.src = 'data:image/png;base64,' + data.preview;
+        previewImage.classList.remove('d-none');
+        previewPlaceholder.classList.add('d-none');
+        printBtn.disabled = false;
+        
+        // Update length display
+        currentLengthInches = data.lengthInches;
+        lengthBadge.textContent = data.lengthInches.toFixed(1) + '"';
+        
+        // Warning
+        if (data.warning) {
+            lengthBadge.classList.remove('bg-secondary', 'bg-success');
+            lengthBadge.classList.add('bg-danger');
+            lengthWarning.classList.remove('d-none');
+        } else {
+            lengthBadge.classList.remove('bg-danger', 'bg-secondary');
+            lengthBadge.classList.add('bg-success');
+            lengthWarning.classList.add('d-none');
+        }
+        
+    } catch (error) {
+        showError('Failed to generate image: ' + error.message);
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="bi bi-stars"></i> Generate Image';
+    }
+}
+
+// Update AI preview (when rotation changes)
+async function updateAiPreview() {
+    if (!currentAiImageData) {
+        resetPreview();
+        return;
+    }
+    
+    try {
+        const rotation = document.querySelector('input[name="aiRotation"]:checked').value;
+        
+        const response = await fetch('/api/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: 'image',
+                content: currentAiImageData,
+                rotation: rotation
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        // Show preview
+        if (data.preview) {
+            previewImage.src = 'data:image/png;base64,' + data.preview;
+            previewImage.classList.remove('d-none');
+            previewPlaceholder.classList.add('d-none');
+            printBtn.disabled = false;
+        }
+        
+        // Update length display
+        currentLengthInches = data.lengthInches;
+        lengthBadge.textContent = data.lengthInches.toFixed(1) + '"';
+        
+        // Warning
+        if (data.warning) {
+            lengthBadge.classList.remove('bg-secondary', 'bg-success');
+            lengthBadge.classList.add('bg-danger');
+            lengthWarning.classList.remove('d-none');
+        } else {
+            lengthBadge.classList.remove('bg-danger', 'bg-secondary');
+            lengthBadge.classList.add('bg-success');
+            lengthWarning.classList.add('d-none');
+        }
+        
+    } catch (error) {
+        showError('Failed to update preview: ' + error.message);
+    }
 }
 
 // Handle image file
@@ -249,7 +408,14 @@ function setupPrintButton() {
 
 // Send print job
 async function sendPrint() {
-    const content = currentMode === 'text' ? textInput.value : currentImageData;
+    let content;
+    if (currentMode === 'text') {
+        content = textInput.value;
+    } else if (currentMode === 'image') {
+        content = currentImageData;
+    } else {
+        content = currentAiImageData;
+    }
     
     if (!content) {
         showError('No content to print');
@@ -260,6 +426,10 @@ async function sendPrint() {
     printBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Printing...';
     
     try {
+        const rotation = currentMode === 'ai' 
+            ? document.querySelector('input[name="aiRotation"]:checked').value
+            : document.querySelector('input[name="rotation"]:checked').value;
+        
         const response = await fetch('/api/print', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -267,7 +437,7 @@ async function sendPrint() {
                 mode: currentMode,
                 content: content,
                 fontSize: fontSize.value,
-                rotation: document.querySelector('input[name="rotation"]:checked').value
+                rotation: rotation
             })
         });
         

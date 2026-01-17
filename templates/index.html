@@ -30,6 +30,10 @@
                     <label class="btn btn-outline-primary" for="modeImage">
                         <i class="bi bi-image"></i> Image
                     </label>
+                    <input type="radio" class="btn-check" name="mode" id="modeAi" value="ai">
+                    <label class="btn btn-outline-primary" for="modeAi">
+                        <i class="bi bi-stars"></i> AI
+                    </label>
                 </div>
 
                 <!-- Text Input Section -->
@@ -81,6 +85,46 @@
                         <div id="imageInfo" class="mt-2 d-none">
                             <span class="badge bg-info" id="imageName"></span>
                             <button type="button" class="btn btn-sm btn-outline-danger" id="clearImage">
+                                <i class="bi bi-x"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Image Generation Section -->
+                <div id="aiSection" class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label">Rotation Mode</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="aiRotation" id="aiRotAuto" value="auto" checked>
+                            <label class="btn btn-outline-secondary" for="aiRotAuto" title="Rotate landscape images to print larger">
+                                <i class="bi bi-arrow-repeat"></i> Auto
+                            </label>
+                            <input type="radio" class="btn-check" name="aiRotation" id="aiRotOriginal" value="original">
+                            <label class="btn btn-outline-secondary" for="aiRotOriginal" title="Keep original orientation">
+                                <i class="bi bi-aspect-ratio"></i> Original
+                            </label>
+                            <input type="radio" class="btn-check" name="aiRotation" id="aiRotSquare" value="square">
+                            <label class="btn btn-outline-secondary" for="aiRotSquare" title="Center-crop to square">
+                                <i class="bi bi-bounding-box"></i> Square
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="aiPrompt" class="form-label">Image Prompt</label>
+                        <textarea class="form-control" id="aiPrompt" rows="4" 
+                            placeholder="Describe the image you want to generate...&#10;&#10;Example: A cute cat sitting in a cardboard box"></textarea>
+                        <div class="form-text">
+                            Generates black &amp; white clip-art style images using Gemini AI
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary w-100 mb-3" id="generateBtn">
+                        <i class="bi bi-stars"></i> Generate Image
+                    </button>
+                    <div id="aiImageInfo" class="mb-3 d-none">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success"><i class="bi bi-check"></i> Image generated</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="clearAiImage">
                                 <i class="bi bi-x"></i> Clear
                             </button>
                         </div>
