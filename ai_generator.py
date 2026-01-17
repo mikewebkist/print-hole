@@ -86,7 +86,7 @@ def generate_image(prompt: str) -> Image.Image:
     enhanced_prompt = (
         f"Create a simple black and white clip-art style illustration: {prompt}. "
         "Use bold black lines on white background, high contrast, no gradients, "
-        "simple shapes, suitable for thermal printing. No text or words in the image."
+        "simple shapes, suitable for thermal printing."
     )
     
     try:
