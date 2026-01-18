@@ -164,6 +164,13 @@ def print_content():
             processed_image, _ = process_image(image, rotation_mode)
             success, error = printer.print_image(processed_image)
         
+        elif mode == 'draw':
+            # For draw mode, content is canvas data URL
+            image = base64_to_image(content)
+            rotation_mode = RotationMode('original')
+            processed_image, _ = process_image(image, rotation_mode)
+            success, error = printer.print_image(processed_image)
+        
         else:  # mode == 'image'
             # Process and print image
             rotation = data.get('rotation', 'auto')

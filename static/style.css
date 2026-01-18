@@ -100,6 +100,27 @@ body {
     font-size: 0.9rem;
 }
 
+/* Drawing Canvas */
+.canvas-container {
+    background-color: #fff;
+    border: 2px solid #dee2e6;
+    border-radius: 0.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem;
+    touch-action: none;
+}
+
+#drawCanvas {
+    background-color: #fff;
+    border-radius: 0.25rem;
+    cursor: crosshair;
+    touch-action: none;
+    max-width: 100%;
+    height: auto;
+}
+
 /* Mode toggle buttons */
 .btn-group[role="group"] .btn {
     flex: 1;

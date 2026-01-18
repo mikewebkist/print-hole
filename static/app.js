@@ -7,6 +7,7 @@
 const modeRadios = document.querySelectorAll('input[name="mode"]');
 const textSection = document.getElementById('textSection');
 const imageSection = document.getElementById('imageSection');
+const drawSection = document.getElementById('drawSection');
 const aiSection = document.getElementById('aiSection');
 const textInput = document.getElementById('textInput');
 const fontSize = document.getElementById('fontSize');
@@ -21,6 +22,11 @@ const aiPrompt = document.getElementById('aiPrompt');
 const generateBtn = document.getElementById('generateBtn');
 const aiImageInfo = document.getElementById('aiImageInfo');
 const clearAiImage = document.getElementById('clearAiImage');
+const drawCanvas = document.getElementById('drawCanvas');
+const clearCanvasBtn = document.getElementById('clearCanvas');
+const undoCanvasBtn = document.getElementById('undoCanvas');
+const brushSizeInput = document.getElementById('brushSize');
+const brushSizeValue = document.getElementById('brushSizeValue');
 const previewPlaceholder = document.getElementById('previewPlaceholder');
 const previewImage = document.getElementById('previewImage');
 const lengthBadge = document.getElementById('lengthBadge');
@@ -40,11 +46,19 @@ let currentAiImageData = null;
 let previewDebounceTimer = null;
 let currentLengthInches = 0;
 
+// Drawing state
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+let drawingHistory = [];
+let brushSize = 8;
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupModeToggle();
     setupTextInput();
     setupImageInput();
+    setupDrawInput();
     setupAiInput();
     setupPrintButton();
 });
@@ -58,6 +72,7 @@ function setupModeToggle() {
             // Hide all sections first
             textSection.classList.add('d-none');
             imageSection.classList.add('d-none');
+            drawSection.classList.add('d-none');
             aiSection.classList.add('d-none');
             
             if (currentMode === 'text') {
@@ -70,6 +85,9 @@ function setupModeToggle() {
                 } else {
                     resetPreview();
                 }
+            } else if (currentMode === 'draw') {
+                drawSection.classList.remove('d-none');
+                updateDrawPreview();
             } else if (currentMode === 'ai') {
                 aiSection.classList.remove('d-none');
                 if (currentAiImageData) {
@@ -160,6 +178,179 @@ function setupImageInput() {
         fileInput.value = '';
         resetPreview();
     });
+}
+
+// Draw Input
+function setupDrawInput() {
+    const ctx = drawCanvas.getContext('2d');
+    
+    // Initialize canvas with white background
+    clearCanvas();
+    
+    // Get position from mouse or touch event
+    function getPosition(e) {
+        const rect = drawCanvas.getBoundingClientRect();
+        const scaleX = drawCanvas.width / rect.width;
+        const scaleY = drawCanvas.height / rect.height;
+        
+        if (e.touches && e.touches.length > 0) {
+            return {
+                x: (e.touches[0].clientX - rect.left) * scaleX,
+                y: (e.touches[0].clientY - rect.top) * scaleY
+            };
+        }
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+    
+    function startDrawing(e) {
+        e.preventDefault();
+        isDrawing = true;
+        const pos = getPosition(e);
+        lastX = pos.x;
+        lastY = pos.y;
+        
+        // Draw a dot for single clicks
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, brushSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        
+        const pos = getPosition(e);
+        
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+    }
+    
+    function stopDrawing(e) {
+        if (isDrawing) {
+            e.preventDefault();
+            isDrawing = false;
+            saveToHistory();
+            updateDrawPreview();
+        }
+    }
+    
+    // Mouse events
+    drawCanvas.addEventListener('mousedown', startDrawing);
+    drawCanvas.addEventListener('mousemove', draw);
+    drawCanvas.addEventListener('mouseup', stopDrawing);
+    drawCanvas.addEventListener('mouseout', stopDrawing);
+    
+    // Touch events
+    drawCanvas.addEventListener('touchstart', startDrawing, { passive: false });
+    drawCanvas.addEventListener('touchmove', draw, { passive: false });
+    drawCanvas.addEventListener('touchend', stopDrawing, { passive: false });
+    drawCanvas.addEventListener('touchcancel', stopDrawing, { passive: false });
+    
+    // Clear button
+    clearCanvasBtn.addEventListener('click', () => {
+        clearCanvas();
+        saveToHistory();
+        updateDrawPreview();
+    });
+    
+    // Undo button
+    undoCanvasBtn.addEventListener('click', () => {
+        if (drawingHistory.length > 1) {
+            drawingHistory.pop();
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                ctx.drawImage(img, 0, 0);
+                updateDrawPreview();
+            };
+            img.src = drawingHistory[drawingHistory.length - 1];
+        } else {
+            clearCanvas();
+            updateDrawPreview();
+        }
+    });
+    
+    // Brush size
+    brushSizeInput.addEventListener('input', (e) => {
+        brushSize = parseInt(e.target.value);
+        brushSizeValue.textContent = brushSize;
+    });
+}
+
+function clearCanvas() {
+    const ctx = drawCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+}
+
+function saveToHistory() {
+    drawingHistory.push(drawCanvas.toDataURL('image/png'));
+    // Limit history to 20 states
+    if (drawingHistory.length > 20) {
+        drawingHistory.shift();
+    }
+}
+
+async function updateDrawPreview() {
+    const canvasData = drawCanvas.toDataURL('image/png');
+    
+    try {
+        const response = await fetch('/api/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: 'image',
+                content: canvasData,
+                rotation: 'original'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        // Show preview
+        if (data.preview) {
+            previewImage.src = 'data:image/png;base64,' + data.preview;
+            previewImage.classList.remove('d-none');
+            previewPlaceholder.classList.add('d-none');
+            printBtn.disabled = false;
+        }
+        
+        // Update length display
+        currentLengthInches = data.lengthInches;
+        lengthBadge.textContent = data.lengthInches.toFixed(1) + '"';
+        
+        // Warning
+        if (data.warning) {
+            lengthBadge.classList.remove('bg-secondary', 'bg-success');
+            lengthBadge.classList.add('bg-danger');
+            lengthWarning.classList.remove('d-none');
+        } else {
+            lengthBadge.classList.remove('bg-danger', 'bg-secondary');
+            lengthBadge.classList.add('bg-success');
+            lengthWarning.classList.add('d-none');
+        }
+        
+    } catch (error) {
+        showError('Failed to update preview: ' + error.message);
+    }
 }
 
 // AI Input
@@ -413,6 +604,8 @@ async function sendPrint() {
         content = textInput.value;
     } else if (currentMode === 'image') {
         content = currentImageData;
+    } else if (currentMode === 'draw') {
+        content = drawCanvas.toDataURL('image/png');
     } else {
         content = currentAiImageData;
     }
@@ -426,9 +619,14 @@ async function sendPrint() {
     printBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Printing...';
     
     try {
-        const rotation = currentMode === 'ai' 
-            ? document.querySelector('input[name="aiRotation"]:checked').value
-            : document.querySelector('input[name="rotation"]:checked').value;
+        let rotation = 'original';
+        if (currentMode === 'ai') {
+            rotation = document.querySelector('input[name="aiRotation"]:checked').value;
+        } else if (currentMode === 'draw') {
+            rotation = 'original';
+        } else {
+            rotation = document.querySelector('input[name="rotation"]:checked').value;
+        }
         
         const response = await fetch('/api/print', {
             method: 'POST',
