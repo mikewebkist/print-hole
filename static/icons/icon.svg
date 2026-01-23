@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#0d6efd"/>
+  <g fill="#fff">
+    <!-- Printer body -->
+    <rect x="96" y="192" width="320" height="160" rx="16"/>
+    <!-- Paper input slot -->
+    <rect x="128" y="96" width="256" height="112" rx="8" fill="#e9ecef"/>
+    <rect x="144" y="112" width="224" height="80" rx="4" fill="#fff"/>
+    <!-- Receipt/paper output -->
+    <rect x="160" y="336" width="192" height="128" rx="4"/>
+    <!-- Decorative lines on receipt -->
+    <rect x="176" y="360" width="96" height="8" rx="2" fill="#0d6efd"/>
+    <rect x="176" y="380" width="160" height="6" rx="2" fill="#dee2e6"/>
+    <rect x="176" y="396" width="140" height="6" rx="2" fill="#dee2e6"/>
+    <rect x="176" y="412" width="120" height="6" rx="2" fill="#dee2e6"/>
+    <rect x="176" y="428" width="80" height="6" rx="2" fill="#dee2e6"/>
+    <!-- Status light -->
+    <circle cx="384" cy="240" r="12" fill="#28a745"/>
+    <!-- Hole detail -->
+    <ellipse cx="256" cy="280" rx="48" ry="16" fill="#343a40"/>
+  </g>
+</svg>
