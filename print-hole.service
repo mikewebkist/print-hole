@@ -1,0 +1,23 @@
+[Unit]
+Description=Print Hole - Thermal Printer Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Source/print-hole
+Environment="PATH=/home/pi/Source/print-hole/venv/bin"
+ExecStart=/home/pi/Source/print-hole/venv/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --timeout 120 app:app
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/.print-hole.conf /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

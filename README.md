@@ -90,6 +90,84 @@ product_id = 0x5720
 profile = 
 ```
 
+## Production Deployment (systemd)
+
+To run Print Hole automatically on startup:
+
+1. **Install gunicorn** (production WSGI server):
+   ```bash
+   source venv/bin/activate
+   pip install gunicorn
+   ```
+
+2. **Edit the service file** for your setup:
+   ```bash
+   # Update paths if not using /home/pi/Source/print-hole
+   nano print-hole.service
+   ```
+
+3. **Install and enable the service**:
+   ```bash
+   sudo cp print-hole.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable print-hole
+   sudo systemctl start print-hole
+   ```
+
+4. **Check status**:
+   ```bash
+   sudo systemctl status print-hole
+   sudo journalctl -u print-hole -f  # View logs
+   ```
+
+### Running on Port 80
+
+**Option A: Use iptables redirect (recommended)**
+```bash
+# Redirect port 80 to 8080 (no root required for the app)
+sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080
+sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8080
+
+# Make persistent (Debian/Ubuntu)
+sudo apt install iptables-persistent
+sudo netfilter-persistent save
+```
+
+**Option B: Use nginx as reverse proxy**
+```bash
+sudo apt install nginx
+```
+
+Create `/etc/nginx/sites-available/print-hole`:
+```nginx
+server {
+    listen 80;
+    server_name _;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size 20M;
+    }
+}
+```
+
+Then enable:
+```bash
+sudo ln -s /etc/nginx/sites-available/print-hole /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo systemctl restart nginx
+```
+
+**Option C: Bind directly to port 80** (requires `CAP_NET_BIND_SERVICE`):
+```bash
+# Edit service file to bind to port 80
+sudo setcap 'cap_net_bind_service=+ep' /home/pi/Source/print-hole/venv/bin/gunicorn
+# Then change --bind to 0.0.0.0:80 in print-hole.service
+```
+
 ## Troubleshooting
 
 **Printer not found:**
@@ -105,3 +183,4 @@ profile =
 ## License
 
 MIT
+
