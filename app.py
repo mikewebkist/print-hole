@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, jsonify
 import base64
 from io import BytesIO
 
+from PIL import Image
 from image_processor import (
     process_image,
     image_to_base64,
@@ -20,7 +21,7 @@ from markdown_printer import (
     preview_to_base64,
     FontSize
 )
-from printer import get_printer
+from printer import get_printer, ROLLO_PRINT_WIDTH_DOTS as ROLLO_WIDTH, ROLLO_DPI as ROLLO_PRINTER_DPI
 from ai_generator import generate_image, generate_image_base64
 
 app = Flask(__name__)
@@ -122,7 +123,8 @@ def print_content():
         "mode": "text" | "image",
         "content": string (markdown text or base64 image),
         "fontSize": "small" | "medium" | "large" (for text mode),
-        "rotation": "auto" | "original" | "square" (for image mode)
+        "rotation": "auto" | "original" | "square" (for image mode),
+        "printer": "usb" | "rollo" (optional, default "usb")
     }
     
     Response JSON:
@@ -135,6 +137,10 @@ def print_content():
         data = request.get_json()
         mode = data.get('mode', 'text')
         content = data.get('content', '')
+        printer_type = data.get('printer', 'usb')
+        
+        if printer_type not in ('usb', 'rollo'):
+            printer_type = 'usb'
         
         if not content:
             return jsonify({
@@ -142,7 +148,7 @@ def print_content():
                 'error': 'No content to print'
             })
         
-        printer = get_printer()
+        printer = get_printer(printer_type)
         
         if mode == 'text':
             # Parse markdown and send ESC/POS commands
@@ -150,8 +156,18 @@ def print_content():
             if font_size not in ('small', 'medium', 'large'):
                 font_size = 'small'
             
-            commands, _ = parse_markdown(content, font_size)
-            success, error = printer.print_text_commands(commands)
+            if printer_type == 'rollo':
+                # Rollo requires image-based printing, render text as image
+                preview_image, _ = generate_preview(content, font_size)
+                # Scale to Rollo width
+                if preview_image.width > ROLLO_WIDTH:
+                    ratio = ROLLO_WIDTH / preview_image.width
+                    new_height = int(preview_image.height * ratio)
+                    preview_image = preview_image.resize((ROLLO_WIDTH, new_height), Image.Resampling.LANCZOS)
+                success, error = printer.print_image(preview_image)
+            else:
+                commands, _ = parse_markdown(content, font_size)
+                success, error = printer.print_text_commands(commands)
         
         elif mode == 'ai':
             # For AI mode, content is already base64 image data from generation

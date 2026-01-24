@@ -11,6 +11,7 @@ const drawSection = document.getElementById('drawSection');
 const aiSection = document.getElementById('aiSection');
 const textInput = document.getElementById('textInput');
 const fontSize = document.getElementById('fontSize');
+const printerSelect = document.getElementById('printerSelect');
 const rotationRadios = document.querySelectorAll('input[name="rotation"]');
 const aiRotationRadios = document.querySelectorAll('input[name="aiRotation"]');
 const dropZone = document.getElementById('dropZone');
@@ -31,6 +32,7 @@ const previewPlaceholder = document.getElementById('previewPlaceholder');
 const previewImage = document.getElementById('previewImage');
 const lengthBadge = document.getElementById('lengthBadge');
 const lengthWarning = document.getElementById('lengthWarning');
+const rolloInfo = document.getElementById('rolloInfo');
 const printBtn = document.getElementById('printBtn');
 const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
 const confirmLength = document.getElementById('confirmLength');
@@ -45,6 +47,7 @@ let currentImageData = null;
 let currentAiImageData = null;
 let previewDebounceTimer = null;
 let currentLengthInches = 0;
+let currentPrinter = 'usb';
 
 // Drawing state
 let isDrawing = false;
@@ -55,6 +58,7 @@ let brushSize = 8;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    setupPrinterSelect();
     setupModeToggle();
     setupTextInput();
     setupImageInput();
@@ -62,6 +66,32 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAiInput();
     setupPrintButton();
 });
+
+// Printer Selection
+function setupPrinterSelect() {
+    printerSelect.addEventListener('change', (e) => {
+        currentPrinter = e.target.value;
+        
+        // Update UI hints based on printer
+        const isRollo = currentPrinter === 'rollo';
+        
+        // Show info about Rollo's fixed paper size
+        if (rolloInfo) {
+            rolloInfo.classList.toggle('d-none', !isRollo);
+        }
+        
+        // Update preview if there's content
+        if (currentMode === 'text' && textInput.value) {
+            updatePreview();
+        } else if (currentMode === 'image' && currentImageData) {
+            updatePreview();
+        } else if (currentMode === 'draw') {
+            updateDrawPreview();
+        } else if (currentMode === 'ai' && currentAiImageData) {
+            updateAiPreview();
+        }
+    });
+}
 
 // Mode Toggle
 function setupModeToggle() {
@@ -635,7 +665,8 @@ async function sendPrint() {
                 mode: currentMode,
                 content: content,
                 fontSize: fontSize.value,
-                rotation: rotation
+                rotation: rotation,
+                printer: currentPrinter
             })
         });
         
