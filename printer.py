@@ -92,7 +92,6 @@ class ThermalPrinter:
                 profile=self.config['profile'] or 'default'
             )
             self.printer.set(density=5)
-            self.printer.set_sleep_in_fragment(100)
             return True, ""
             
         except USBNotFoundError:
