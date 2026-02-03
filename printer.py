@@ -1,6 +1,6 @@
 """
-Printer interface for 80mm USB thermal printer using python-escpos.
-Also supports network printers via CUPS (e.g., Rollo X1040).
+Printer interface for thermal printers via CUPS.
+Supports Kitchen_MD (markdown), Kitchen_Art (images), and Rollo X1040 (stickers).
 """
 
 import os
@@ -11,15 +11,8 @@ from pathlib import Path
 from typing import Tuple
 from PIL import Image
 
-try:
-    from escpos.printer import Usb
-    from escpos.exceptions import USBNotFoundError
-    ESCPOS_AVAILABLE = True
-except ImportError:
-    ESCPOS_AVAILABLE = False
 
-
-# Printer specifications
+# Printer specifications (for preview calculations)
 PRINT_WIDTH_DOTS = 576
 PRINT_WIDTH_BYTES = 72  # 576 / 8
 DPI = 203
@@ -31,107 +24,74 @@ CHARS_PER_LINE_FONT_A = 48
 CHARS_PER_LINE_FONT_B = 64
 DEFAULT_LINE_SPACING = 30
 
+# CUPS printer names for kitchen thermal printer
+KITCHEN_MD_PRINTER = 'Kitchen_MD'
+KITCHEN_ART_PRINTER = 'Kitchen_Art'
 
-def load_config() -> dict:
-    """Load printer configuration from ~/.print-hole.conf"""
-    config_path = Path.home() / '.print-hole.conf'
-    config = {
-        'vendor_id': None,
-        'product_id': None,
-        'profile': None,
-        'in_ep': 0x82,
-        'out_ep': 0x01,
-    }
-    
-    if config_path.exists():
-        parser = configparser.ConfigParser()
-        parser.read(config_path)
+
+def _check_cups_printer(printer_name: str) -> Tuple[bool, str]:
+    """Check if a CUPS printer is available."""
+    try:
+        result = subprocess.run(
+            ['lpstat', '-p', printer_name],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return False, f"Printer '{printer_name}' not found. Check CUPS configuration."
+        if 'disabled' in result.stdout.lower():
+            return False, f"Printer '{printer_name}' is disabled."
+        return True, ""
+    except subprocess.TimeoutExpired:
+        return False, "Timeout checking printer status"
+    except FileNotFoundError:
+        return False, "CUPS not installed (lpstat not found)"
+    except Exception as e:
+        return False, f"Error checking printer: {str(e)}"
+
+
+def _print_to_cups(printer_name: str, file_path: str, options: list = None) -> Tuple[bool, str]:
+    """Print a file to a CUPS printer."""
+    try:
+        cmd = ['lp', '-d', printer_name]
+        if options:
+            for opt in options:
+                cmd.extend(['-o', opt])
+        cmd.append(file_path)
         
-        if 'printer' in parser:
-            vendor = parser['printer'].get('vendor_id', '')
-            product = parser['printer'].get('product_id', '')
-            in_ep = parser['printer'].get('in_ep', '')
-            out_ep = parser['printer'].get('out_ep', '')
-            
-            # Parse hex values (0x0483) or decimal
-            if vendor:
-                config['vendor_id'] = int(vendor, 16) if vendor.startswith('0x') else int(vendor)
-            if product:
-                config['product_id'] = int(product, 16) if product.startswith('0x') else int(product)
-            if in_ep:
-                config['in_ep'] = int(in_ep, 16) if in_ep.startswith('0x') else int(in_ep)
-            if out_ep:
-                config['out_ep'] = int(out_ep, 16) if out_ep.startswith('0x') else int(out_ep)
-            
-            config['profile'] = parser['printer'].get('profile', None)
-    
-    return config
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            return False, f"Print failed: {result.stderr}"
+        
+        return True, ""
+    except subprocess.TimeoutExpired:
+        return False, "Timeout sending print job"
+    except Exception as e:
+        return False, f"Print error: {str(e)}"
 
 
 class ThermalPrinter:
-    """Interface for 80mm USB thermal printer using python-escpos."""
+    """Interface for 80mm USB thermal printer via CUPS queues."""
     
     def __init__(self):
-        self.config = load_config()
-        self.printer = None
-    
-    def connect(self) -> Tuple[bool, str]:
-        """Connect to the printer. Returns (success, error_message)."""
-        if not ESCPOS_AVAILABLE:
-            return False, "python-escpos library not installed. Run: pip install python-escpos"
-        
-        if not self.config['vendor_id'] or not self.config['product_id']:
-            return False, "Printer not configured. Create ~/.print-hole.conf with vendor_id and product_id. Use 'lsusb' to find these values."
-        
-        try:
-            self.printer = Usb(
-                idVendor=self.config['vendor_id'],
-                idProduct=self.config['product_id'],
-                in_ep=self.config['in_ep'],
-                out_ep=self.config['out_ep'],
-                profile=self.config['profile'] or 'default'
-            )
-            self.printer.set(density=5)
-            return True, ""
-            
-        except USBNotFoundError:
-            return False, f"Printer not found. Check USB connection and verify vendor_id=0x{self.config['vendor_id']:04x}, product_id=0x{self.config['product_id']:04x}"
-        except Exception as e:
-            return False, f"Failed to connect to printer: {str(e)}"
-    
-    def disconnect(self):
-        """Disconnect from the printer."""
-        if self.printer:
-            try:
-                self.printer.close()
-            except Exception:
-                pass
-            self.printer = None
-    
-    def print_raw(self, data: bytes) -> Tuple[bool, str]:
-        """Send raw ESC/POS commands to printer."""
-        success, error = self.connect()
-        if not success:
-            return False, error
-        
-        try:
-            self.printer._raw(b'\x1b\x40')  # ESC @ - Initialize
-            self.printer._raw(data)
-            self.printer.ln(3)
-            return True, ""
-        except Exception as e:
-            return False, f"Print error: {str(e)}"
-        finally:
-            self.disconnect()
+        self.md_printer = KITCHEN_MD_PRINTER
+        self.art_printer = KITCHEN_ART_PRINTER
     
     def print_image(self, image: Image.Image, cut: bool = True) -> Tuple[bool, str]:
-        """Print a PIL Image using python-escpos image method."""
-        success, error = self.connect()
-        if not success:
+        """Print a PIL Image via Kitchen_Art CUPS queue."""
+        available, error = _check_cups_printer(self.art_printer)
+        if not available:
             return False, error
         
         try:
-            # Ensure image is 1-bit mode
+            # Ensure image is 1-bit mode for thermal printing
             if image.mode != '1':
                 image = image.convert('1')
             
@@ -142,55 +102,57 @@ class ThermalPrinter:
                 image = image.resize((PRINT_WIDTH_DOTS, new_height), Image.Resampling.LANCZOS)
                 image = image.convert('1')
             
-            # Print image using escpos
-            self.printer.image(image, impl='bitImageRaster')
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                tmp_path = tmp.name
+                image.save(tmp_path, 'PNG')
             
-            # Feed 4 blank lines (~20mm) before cut for margin
-            self.printer.ln(4)
-            
-            if cut:
-                self.printer.cut(mode='PART')
-            
-            return True, ""
+            try:
+                success, error = _print_to_cups(self.art_printer, tmp_path)
+                return success, error
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+        
         except Exception as e:
             return False, f"Print error: {str(e)}"
-        finally:
-            self.disconnect()
     
     def print_text_commands(self, commands: list, cut: bool = True) -> Tuple[bool, str]:
         """
-        Print using a list of ESC/POS command tuples.
-        Each tuple is (command_type, data) where command_type is:
-        - 'raw': raw bytes to send
-        - 'text': text string to print
-        - 'set': dict of escpos set() parameters (bold, underline, double_height, etc.)
+        Print text/markdown via Kitchen_MD CUPS queue.
+        Commands are converted to plain text for the CUPS queue to handle.
         """
-        success, error = self.connect()
-        if not success:
+        available, error = _check_cups_printer(self.md_printer)
+        if not available:
             return False, error
         
         try:
-            self.printer._raw(b'\x1b\x32')  # ESC 2 - Default line spacing
-            
+            # Extract text content from commands
+            text_content = []
             for cmd_type, data in commands:
-                if cmd_type == 'raw':
-                    self.printer._raw(data)
-                elif cmd_type == 'text':
-                    self.printer.text(data)
-                elif cmd_type == 'set':
-                    self.printer.set(**data)
+                if cmd_type == 'text':
+                    text_content.append(data)
             
-            # Feed 4 blank lines before cut for margin
-            self.printer.ln(4)
+            full_text = ''.join(text_content)
             
-            if cut:
-                self.printer.cut(mode='PART')
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='w', encoding='utf-8') as tmp:
+                tmp_path = tmp.name
+                tmp.write(full_text)
             
-            return True, ""
+            try:
+                success, error = _print_to_cups(self.md_printer, tmp_path)
+                return success, error
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+        
         except Exception as e:
             return False, f"Print error: {str(e)}"
-        finally:
-            self.disconnect()
 
 
 # Rollo X1040 configuration
@@ -208,34 +170,13 @@ class RolloPrinter:
     def __init__(self):
         self.printer_name = ROLLO_PRINTER_NAME
     
-    def _check_printer_available(self) -> Tuple[bool, str]:
-        """Check if the Rollo printer is available via CUPS."""
-        try:
-            result = subprocess.run(
-                ['lpstat', '-p', self.printer_name],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode != 0:
-                return False, f"Printer '{self.printer_name}' not found. Check CUPS configuration."
-            if 'disabled' in result.stdout.lower():
-                return False, f"Printer '{self.printer_name}' is disabled."
-            return True, ""
-        except subprocess.TimeoutExpired:
-            return False, "Timeout checking printer status"
-        except FileNotFoundError:
-            return False, "CUPS not installed (lpstat not found)"
-        except Exception as e:
-            return False, f"Error checking printer: {str(e)}"
-    
     def print_image(self, image: Image.Image, cut: bool = True) -> Tuple[bool, str]:
         """
         Print a PIL Image to the Rollo printer via CUPS.
         The image is resized to fit the fixed 4x6 inch sticker size.
         Auto-rotates to maximize coverage on the sticker.
         """
-        available, error = self._check_printer_available()
+        available, error = _check_cups_printer(self.printer_name)
         if not available:
             return False, error
         
@@ -296,24 +237,12 @@ class RolloPrinter:
                 canvas.save(tmp_path, 'PNG')
             
             try:
-                # Print using lp command with Rollo-specific options
-                result = subprocess.run(
-                    [
-                        'lp',
-                        '-d', self.printer_name,
-                        '-o', 'media=Custom.4x6in',
-                        '-o', 'fit-to-page',
-                        tmp_path
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
+                success, error = _print_to_cups(
+                    self.printer_name,
+                    tmp_path,
+                    ['media=Custom.4x6in', 'fit-to-page']
                 )
-                
-                if result.returncode != 0:
-                    return False, f"Print failed: {result.stderr}"
-                
-                return True, ""
+                return success, error
             finally:
                 # Clean up temp file
                 try:
